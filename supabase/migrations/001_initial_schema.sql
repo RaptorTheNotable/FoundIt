@@ -61,9 +61,10 @@ CREATE TRIGGER on_auth_user_created
 CREATE OR REPLACE FUNCTION public.protect_profile_role()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- If role is being modified, verify that caller is an existing administrator
+  -- If role is being modified, verify that caller is an existing administrator.
+  -- Direct database/dashboard edits (where auth.uid() IS NULL) are permitted.
   IF NEW.role != OLD.role THEN
-    IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin') THEN
+    IF auth.uid() IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin') THEN
       NEW.role := OLD.role; -- Silently preserve existing role, rejecting escalation
     END IF;
   END IF;
