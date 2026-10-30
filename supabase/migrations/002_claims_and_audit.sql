@@ -279,3 +279,27 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Function 5.5: Securely fetch public verification challenge question for claimants
+-- Invariant: Returns strictly prompt_question, never exposing the confidential secret_detail
+CREATE OR REPLACE FUNCTION public.get_item_prompt_question(p_item_id UUID)
+RETURNS TEXT AS $$
+DECLARE
+  v_question TEXT;
+BEGIN
+  SELECT prompt_question INTO v_question
+  FROM public.private_identifiers
+  WHERE item_id = p_item_id;
+
+  RETURN v_question;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.get_item_prompt_question(UUID) TO anon, authenticated;
+
+-- Public View exposing only prompt questions without confidential secret details
+CREATE OR REPLACE VIEW public.item_prompt_questions AS
+  SELECT item_id, prompt_question
+  FROM public.private_identifiers;
+
+GRANT SELECT ON public.item_prompt_questions TO anon, authenticated;
+

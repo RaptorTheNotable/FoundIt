@@ -126,14 +126,45 @@ async function ClaimSubmitContent({ searchParams }: ClaimSubmitPageProps) {
     );
   }
 
-  // Fetch only prompt question (NEVER secret_detail)
-  const { data: privData } = await supabase
-    .from('private_identifiers')
-    .select('prompt_question')
-    .eq('item_id', item.id)
-    .maybeSingle<Pick<PrivateIdentifier, 'prompt_question'>>();
+  // Fetch prompt question for claimant challenge (NEVER exposes secret_detail)
+  let promptQuestion: string | null = null;
 
-  const promptQuestion = privData?.prompt_question || null;
+  try {
+    const { data: rpcQuestion } = await supabase.rpc('get_item_prompt_question', {
+      p_item_id: item.id,
+    });
+    if (rpcQuestion) {
+      promptQuestion = rpcQuestion;
+    }
+  } catch {
+    // RPC not present yet
+  }
+
+  if (!promptQuestion) {
+    try {
+      const { data: viewData } = await supabase
+        .from('item_prompt_questions')
+        .select('prompt_question')
+        .eq('item_id', item.id)
+        .maybeSingle();
+
+      if (viewData?.prompt_question) {
+        promptQuestion = viewData.prompt_question;
+      }
+    } catch {
+      // View not present yet
+    }
+  }
+
+  if (!promptQuestion) {
+    const { data: privData } = await supabase
+      .from('private_identifiers')
+      .select('prompt_question')
+      .eq('item_id', item.id)
+      .maybeSingle<Pick<PrivateIdentifier, 'prompt_question'>>();
+
+    promptQuestion = privData?.prompt_question || null;
+  }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

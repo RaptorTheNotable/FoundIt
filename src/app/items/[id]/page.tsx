@@ -50,16 +50,45 @@ async function ItemDetailContent({ params }: ItemDetailPageProps) {
   const isClosed = item.status === 'recovered' || item.status === 'handed_over';
 
   // 3. If it's a found item, check if there is a prompt question for claimants
-  // Query only prompt_question, NEVER secret_detail
+  // Query only prompt_question via secure RPC, View, or direct query (NEVER secret_detail)
   let promptQuestion: string | null = null;
   if (isFound) {
-    const { data: privData } = await supabase
-      .from('private_identifiers')
-      .select('prompt_question')
-      .eq('item_id', item.id)
-      .maybeSingle<Pick<PrivateIdentifier, 'prompt_question'>>();
+    try {
+      const { data: rpcQuestion } = await supabase.rpc('get_item_prompt_question', {
+        p_item_id: item.id,
+      });
+      if (rpcQuestion) {
+        promptQuestion = rpcQuestion;
+      }
+    } catch {
+      // RPC fallback
+    }
 
-    promptQuestion = privData?.prompt_question || null;
+    if (!promptQuestion) {
+      try {
+        const { data: viewData } = await supabase
+          .from('item_prompt_questions')
+          .select('prompt_question')
+          .eq('item_id', item.id)
+          .maybeSingle();
+
+        if (viewData?.prompt_question) {
+          promptQuestion = viewData.prompt_question;
+        }
+      } catch {
+        // View fallback
+      }
+    }
+
+    if (!promptQuestion) {
+      const { data: privData } = await supabase
+        .from('private_identifiers')
+        .select('prompt_question')
+        .eq('item_id', item.id)
+        .maybeSingle<Pick<PrivateIdentifier, 'prompt_question'>>();
+
+      promptQuestion = privData?.prompt_question || null;
+    }
   }
 
   return (
